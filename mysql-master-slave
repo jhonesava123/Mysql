@@ -1,0 +1,64 @@
+If you do not have mysql, you can install it with this command:
+#apt-get install mysql-server mysql-client
+################    Step One—Configure the Master Database: ###########
+
+#vi /etc/mysql/mysql.conf.d/mysqld.conf
+ The first step is to find the section that looks like this, binding the server to the local host:
+>> bind-address            = 12.34.56.789 (The IP Of Master DB)
+Make sure this line is uncommented:
+
+>> server-id               = 1
+>> log_bin                 = /var/log/mysql/mysql-bin.log
+>> binlog_do_db            = newdatabase
+>> service mysql restart
+
+# mysql -u root -p
+
+We need to grant privileges to the slave. You can use this line to name your slave and set up their password. The command should be in this format:
+
+>> GRANT REPLICATION SLAVE ON *.* TO 'slave_user'@'%' IDENTIFIED BY 'password';
+>> FLUSH PRIVILEGES;
+>> USE newdatabase; ( This Is The DB You Need It To Be Replicated With The Slave )
+Following that, lock the database to prevent any new changes:
+>> SHOW MASTER STATUS;
+mysql> SHOW MASTER STATUS;
++------------------+----------+--------------+------------------+
+| File             | Position | Binlog_Do_DB | Binlog_Ignore_DB |
++------------------+----------+--------------+------------------+
+| mysql-bin.000001 |      107 | newdatabase  |                  |
++------------------+----------+--------------+------------------+
+1 row in set (0.00 sec)
+
+export your database using mysqldump in the new window (make sure you are typing this command in the bash shell, not in MySQL).:
+# mysqldump -u root -p --opt newdatabase > newdatabase.sql
+returning to your your original window, unlock the databases (making them writeable again). Finish up by exiting the shell.
+>> UNLOCK TABLES;
+\q to quite the data base
+
+Step Two—Configure the Slave Database:
+
+Log into your slave server, open up the MySQL shell and create the new database that you will be replicating from the master (then exit):
+
+>> CREATE DATABASE newdatabase;
+\q to exit
+
+Import the database that you previously exported from the master database ( on master server )
+
+# mysql -u root -p newdatabase < /path/to/newdatabase.sql
+# #vi /etc/mysql/mysql.conf.d/mysqld.conf
+>> server-id               = 2
+>> relay-log               = /var/log/mysql/mysql-relay-bin.log ( You Need To Add This Line )
+>> log_bin                 = /var/log/mysql/mysql-bin.log
+>> binlog_do_db            = newdatabase
+# service mysql restart
+
+Open up the the MySQL shell once again and type in the following details, replacing the values to match your information:
+
+>> CHANGE MASTER TO MASTER_HOST='12.34.56.789',MASTER_USER='slave_user', MASTER_PASSWORD='password', MASTER_LOG_FILE='mysql-bin.000001', MASTER_LOG_POS=  107;
+
+Activate the slave server:
+
+>> START SLAVE;
+>> SHOW SLAVE STATUS\G (\G To Be Mor Readable )
+
+
